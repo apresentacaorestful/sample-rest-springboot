@@ -1,118 +1,145 @@
 package com.welyab.tutorials.restful.api;
 
+import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
+import static org.springframework.hateoas.mvc.ControllerLinkBuilder.methodOn;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-import javax.ws.rs.core.UriInfo;
+import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.springframework.hateoas.Link;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.welyab.tutorials.restful.Customer;
 import com.welyab.tutorials.restful.service.CustomerService;
 
-@Component
-@Path("customers")
+@RestController("customers")
 public class CustomerResource {
 
     @Autowired
     private CustomerService customerService;
 
-    @GET
-    @Path("{customerCode}")
-    @Produces({
-	    MediaType.APPLICATION_JSON,
-	    MediaType.APPLICATION_XML
-    })
-    public Response get(@PathParam("customerCode") String customerCode, @Context UriInfo uriInfo) {
+    @Autowired
+    private HttpServletRequest request;
+
+    @RequestMapping(
+	    path = "{customerCode}",
+	    method = RequestMethod.GET,
+	    produces = {
+		    "application/json",
+		    "application/xml"
+	    }
+    )
+    public ResponseEntity<Customer> get(
+	    @PathVariable("customerCode") String customerCode
+    ) {
 	Customer customer = null;
 	try {
 	    customer = customerService.get(customerCode);
 	} catch (IllegalArgumentException e) {
-	    return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+	    return ResponseEntity.badRequest().build();
 	}
 
 	if (customer == null) {
-	    return Response.status(Status.NOT_FOUND).build();
+	    return ResponseEntity.notFound().build();
 	}
 
-	customer.setSelf(getSelfLink(customer, uriInfo));
-	customer.setDelete(getDeleteLink(customer, uriInfo));
+	customer.addLink(getCustomerLink(customerCode));
+	customer.addLink(deleteCustomerLink(customerCode));
+	customer.addLink(allCostumersLink());
 
-	return Response.status(Status.OK).entity(customer).build();
+	return ResponseEntity.ok(customer);
     }
 
-    @GET
-    @Produces({
-	    MediaType.APPLICATION_JSON,
-	    MediaType.APPLICATION_XML
-    })
-    public List<Customer> listCustomers(@Context UriInfo uriInfo) {
+    @RequestMapping(
+	    method = RequestMethod.GET,
+	    produces = {
+		    "application/json",
+		    "application/xml"
+	    }
+    )
+    public List<Customer> listCustomers() {
 	return customerService.getCustomers()
 		.stream()
 		.peek(c -> {
-		    c.setSelf(getSelfLink(c, uriInfo));
-		    c.setDelete(getDeleteLink(c, uriInfo));
+		    c.addLink(getCustomerLink(c.getCode()));
+		    c.addLink(deleteCustomerLink(c.getCode()));
+		    c.addLink(allCostumersLink());
 		})
 		.collect(Collectors.toList());
     }
 
-    @POST
-    @Consumes({
-	    MediaType.APPLICATION_JSON,
-	    MediaType.APPLICATION_XML
-    })
-    public Response add(Customer customer, @Context UriInfo uriInfo) throws URISyntaxException {
+    @RequestMapping(
+	    method = RequestMethod.POST,
+	    consumes = {
+		    "application/json",
+		    "application/xml"
+	    },
+	    produces = {
+		    "application/json",
+		    "application/xml"
+	    }
+    )
+    public ResponseEntity<Customer> add(@RequestBody Customer customer) throws URISyntaxException {
 	customerService.addCostumer(customer);
-	return Response.created(
-		new URI(getSelfLink(customer, uriInfo).getLink())
+	return ResponseEntity.created(
+		new URI("http://asdf.com")
 	).build();
     }
 
-    @PUT
-    @Consumes({
-	    MediaType.APPLICATION_JSON,
-	    MediaType.APPLICATION_XML
-    })
-    public Response update(Customer customer) {
+    @RequestMapping(
+	    method = RequestMethod.PUT,
+	    consumes = {
+		    "application/json",
+		    "application/xml"
+	    }
+    )
+    public ResponseEntity<Customer> update(Customer customer) {
 	customerService.update(customer);
-	return Response.noContent().build();
+	return ResponseEntity.noContent().build();
     }
 
-    @DELETE
-    @Path("{customerCode}")
-    public Response delete(@PathParam("customerCode") String customerCode) {
+    @RequestMapping(
+	    path = "{customerCode}",
+	    method = RequestMethod.DELETE,
+	    consumes = {
+		    "application/json",
+		    "application/xml"
+	    }
+    )
+    public ResponseEntity<Customer> delete(@PathVariable("customerCode") String customerCode) {
 	customerService.removeCustomer(customerCode);
-	return Response.noContent().build();
+	return ResponseEntity.noContent().build();
     }
 
-    private com.welyab.tutorials.restful.api.Link getDeleteLink(Customer customer, UriInfo uriInfo) {
-	URI selfUri = uriInfo
-		.getAbsolutePathBuilder()
-		.path(customer.getCode())
-		.build();
-	return new com.welyab.tutorials.restful.api.Link(selfUri.toString(), "getBook", "DELETE");
+    private static Link getCustomerLink(String customerCode) {
+	return linkTo(methodOn(CustomerResource.class).get(customerCode))
+		.withRel("self")
+		.withType(RequestMethod.GET.name());
     }
 
-    private com.welyab.tutorials.restful.api.Link getSelfLink(Customer customer, UriInfo uriInfo) {
-	URI selfUri = uriInfo
-		.getAbsolutePathBuilder()
-		.path(customer.getCode())
-		.build();
-	return new com.welyab.tutorials.restful.api.Link(selfUri.toString(), "getBook", "GET");
+    private static Link deleteCustomerLink(String customerCode) {
+	return linkTo(methodOn(CustomerResource.class).get(customerCode))
+		.withRel("self")
+		.withType(RequestMethod.DELETE.name());
+    }
+
+    private static Link allCostumersLink() {
+	if (true) {
+	    return deleteCustomerLink("lkfasdjlfkajsdlfkajds");
+	}
+	return linkTo(methodOn(CustomerResource.class).listCustomers())
+		.withRel("allCustomers")
+		.withType(HttpMethod.GET.name());
     }
 }

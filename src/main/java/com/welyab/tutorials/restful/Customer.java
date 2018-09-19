@@ -1,12 +1,15 @@
 package com.welyab.tutorials.restful;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Transient;
 
-import com.welyab.tutorials.restful.api.Link;
+import org.springframework.hateoas.Link;
 
 @Entity
 public class Customer implements Serializable {
@@ -19,10 +22,7 @@ public class Customer implements Serializable {
     private String email;
 
     @Transient
-    private Link self;
-
-    @Transient
-    private Link delete;
+    private List<Link> links;
 
     public String getCode() {
 	return code;
@@ -48,19 +48,18 @@ public class Customer implements Serializable {
 	this.email = email;
     }
 
-    public Link getSelf() {
-	return self;
+    public List<Link> getLinks() {
+	return Collections.unmodifiableList(_getLinks());
     }
 
-    public void setSelf(Link self) {
-	this.self = self;
+    private List<Link> _getLinks() {
+	if (links == null) {
+	    links = new ArrayList<>();
+	}
+	return links;
     }
 
-    public Link getDelete() {
-	return delete;
-    }
-
-    public void setDelete(Link delete) {
-	this.delete = delete;
+    public void addLink(Link link) {
+	_getLinks().add(link);
     }
 }
